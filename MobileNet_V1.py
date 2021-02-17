@@ -44,7 +44,16 @@ class DW_Conv_Block(nn.Module):
 
 
 class MobileNetV1(nn.Module):
-    def __init__(self,in_channels = 3,num_classes=1000):
+    def __init__(self,in_channels = 3,num_classes=1000,width_multiplier = 1.0):
+        """
+
+        :param in_channels: Number of Input channels for the whole Model, default:3(RGB images)
+        :param num_classes: Number of classes for the whole Model, default:1000(ImageNet Dataset)
+        :param width_multiplier: ( Called as α ∈ (0,1], and default value of 1, the smaller the α is, the thinner the model.
+        # it multiplies to all the number of input_channels, and output_channels in the whole network, except
+        1: input channels of input data( image),
+        2- output_channels of the last layer( Number of classes)
+        """
 
         #(# of Dw_Blocks, Output of the block, Stride)
         self.config_list = \
@@ -58,20 +67,27 @@ class MobileNetV1(nn.Module):
              (1, 1024, 2),
              (1, 1024, 2)]
 
+        self.width_multiplier = width_multiplier
+
         super(MobileNetV1, self).__init__()
 
         self.conv = nn.Conv2d(in_channels=in_channels,
-                              out_channels=32,
+                              out_channels=int(32 * self.width_multiplier),
                               kernel_size=3,
                               stride=2,
                               padding=1)
-        self.bn = nn.BatchNorm2d(32)
+        self.bn = nn.BatchNorm2d(int(32 * self.width_multiplier))
         self.relu = nn.ReLU(inplace=True)
 
         # create all the DepthWise block layer via nn.Sequential
         self.dw_pw_layers = self._make_layers()
-        self.avgpool = nn.AvgPool2d(7)
-        self.fc = nn.Linear(1024,num_classes)
+        #if (7 * self.width_multiplier) < 1.0:
+           # pooling_stride = 1
+        #else:
+           # pooling_stride = int(7 * self.width_multiplier)
+
+        #self.avgpool = nn.AvgPool2d(pooling_stride)
+        self.fc = nn.Linear(int(1024 * self.width_multiplier),num_classes)
 
 
     def forward(self,x):
@@ -79,7 +95,8 @@ class MobileNetV1(nn.Module):
         x = self.bn(x)
         x = self.relu(x)
         x = self.dw_pw_layers(x)
-        x = self.avgpool(x)
+        #x = self.avgpool(x)
+        x = nn.AvgPool2d(x.size(2))(x)
         x = x.view(x.size(0),-1)
         x = self.fc(x)
         return x
@@ -97,20 +114,20 @@ class MobileNetV1(nn.Module):
 
                 if len(layers) == 0 :
                     # if this is the firs DW_Modulde, then the input_channels = 32
-                    input_channels = 32
+                    input_channels = int (32 * self.width_multiplier)
                 else:
                     #else the input_channels should be equal to the otput channels of the previous DW-Module
                     input_channels = previous_out_channel
 
-                layers.append(DW_Conv_Block(out_channels=pair_output_channels,
+                layers.append(DW_Conv_Block(out_channels=int(pair_output_channels * self.width_multiplier),
                                                     stride=stride_of_depth_wise,
                                                     in_channels=input_channels))
-                previous_out_channel = pair_output_channels
+                previous_out_channel = int( pair_output_channels * self.width_multiplier)
 
         return nn.Sequential(*layers)
 
 
 
 
-mobile = MobileNetV1(in_channels=3, num_classes=1000)
+mobile = MobileNetV1(in_channels=3, num_classes=1000,width_multiplier=1.0)
 summary(mobile, input_size=(3, 224, 224), device='cpu')
