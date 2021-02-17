@@ -81,12 +81,6 @@ class MobileNetV1(nn.Module):
 
         # create all the DepthWise block layer via nn.Sequential
         self.dw_pw_layers = self._make_layers()
-        #if (7 * self.width_multiplier) < 1.0:
-           # pooling_stride = 1
-        #else:
-           # pooling_stride = int(7 * self.width_multiplier)
-
-        #self.avgpool = nn.AvgPool2d(pooling_stride)
         self.fc = nn.Linear(int(1024 * self.width_multiplier),num_classes)
 
 
@@ -95,7 +89,6 @@ class MobileNetV1(nn.Module):
         x = self.bn(x)
         x = self.relu(x)
         x = self.dw_pw_layers(x)
-        #x = self.avgpool(x)
         x = nn.AvgPool2d(x.size(2))(x)
         x = x.view(x.size(0),-1)
         x = self.fc(x)
